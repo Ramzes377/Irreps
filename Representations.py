@@ -98,7 +98,7 @@ class SymmetricGroup(FiniteGroup):
                     self.simple_transpositions[Permutation(i, j, size = self.n + 1)] = m
                     if tuple(Permutation(i, j, size = self.n + 1)._array_form) in self.elements:
                         self.elements[tuple(Permutation(i, j, size = self.n + 1)._array_form)].representation= m
-                        #self.group[tuple(Permutation(i, j, size = self._n + 1)._array_form)] = m
+                        
 
 class AlternatingGroup(SymmetricGroup):
     def __init__(self, N: int):
@@ -117,13 +117,10 @@ class AlternatingGroup(SymmetricGroup):
         self.simple_transpositions = {}
         n = len(self.standart_tableauxes)  # //2
         self.tableauxes.find_conjugate_transpositions( )
-        #conjugate = self.tableauxes.restrict_conjugate_to_alternating( ) if self._n > 4 else self.tableauxes.conjugate_transpositions
         conjugate = self.tableauxes.calling_to_restrict()
         axial_distances = self.tableauxes.find_axial_distances( )
-        #print(*conjugate.items( ), sep = "\n")
-        for x in range(1, self.n):  # going thru transpositions x, x+1
-            # a = zeros(n, n) #create matrix filled with zeroes
-            m = np.zeros((n, n), Rational if self.show_exact_values else np.float)
+        for x in range(1, self.n):  # going thru transpositions x, x+1 
+            m = np.zeros((n, n), Rational if self.show_exact_values else np.float) #create matrix filled with zeroes
             conj = conjugate[x]
             axl_dist = axial_distances.get(x)
             state = False
