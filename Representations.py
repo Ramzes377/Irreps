@@ -14,18 +14,7 @@ def get_matrix(matrix, show_type = False):
     if not show_type:
         return '\n' + '\n'.join('\t'.join('%0.3f' % x for x in y) for y in matrix)
     else:
-        # from texttable import Texttable
-        # table = Texttable(0)
-        # table.set_deco(Texttable.HEADER)
         matrix = expand(Matrix(matrix))#
-        # n = matrix.shape[0]
-        # for row in range(n):
-        #     print("asdsad", pprint(matrix[row]))
-        #     s = str(matrix[row])[1:-1]  # " ".join(map(lambda x: str(round(x, 4)), matrix[row]))#
-        #     s = s.replace("sqrt(", "√").replace(")", "").split(" ")
-        #     table.add_row(list(filter(lambda x: x, s)))  #
-        #     print(s)
-        # return '\n' + table.draw( )
         return '\n' + pretty(matrix)
 
 class FiniteGroup:
@@ -40,9 +29,6 @@ class FiniteGroup:
 
     def __getitem__(self, element_array_form):
         return self.elements[element_array_form]
-    #
-    # def __setitem__(self, element_array_form, matrix_repr):
-    #     self.elements[element_array_form].representation = matrix_repr
 
     def _display_calculated_elemets_representations(self, exact_output = False):
         t = 0
@@ -167,25 +153,9 @@ class AlternatingGroup(SymmetricGroup):
                         m[n - block - 1, n - index - 1] = non_diag * self._shape.mult
                         m[n - index - 1, n - block - 1] = non_diag * self._shape.mult ** (-1)
 
-            #Permutation(1, 2, size = self._n + 1) *
-            #if tuple((Permutation(1, 2, size = self._n + 1) * Permutation(x, x + 1, size = self._n + 1))._array_form) in self.group.elements:
             if x == 1:
-                # _help_m = m
-                # result = np.zeros((n, n), Rational if self.show_exact_values else np.float)
-                # for i in range(n//2):
-                #     result[i, i] = m[i, i]
-                #     result[n - i - 1, n - i - 1] = -m[i, i]
                 self.simple_transpositions[Permutation(1, 2, size = self.n + 1)] = m#result
             else:
-                # result = np.zeros((n, n), Rational if self.show_exact_values else np.float)
-                # _m = np.zeros((n, n), Rational if self.show_exact_values else np.float)
-                # _doted = _help_m.dot(m)
-                # for i in range(n // 2):
-                #     for j in range(n // 2):
-                #         _m[i, j] = m[i, j]
-                #         _m[n - i - 1, n - j - 1] = m[i, j] if i != j else -m[i, i]
-                #         result[i, j] = _doted[i, j]
-                #         result[n - i - 1, n - j - 1] = _doted[i, j] if i != j else -_doted[i, i]
                 if not state:
                     self.simple_transpositions[Permutation(x, x + 1, size = self.n + 1)] = m
                     self.elements[tuple((Permutation(1, 2, size = self.n + 1) * Permutation(x, x + 1, size = self.n + 1))._array_form)].representation = self.simple_transpositions[Permutation(1, 2, size = self.n + 1)].dot(m)
@@ -238,8 +208,6 @@ class Representation:
         return self.group._display_calculated_elemets_representations(self.show_exact_values)
 
     def __getitem__(self, element_array_form):
-        # from sympy.combinatorics import Permutation
-        # import numpy as np
 
         if not hasattr(self.group, 'simple_transpositions'):
             self.group.find_simple_transps_reprs()
@@ -269,8 +237,6 @@ class Representation:
             pass
 
     def find_elem(self, element_array_form):
-        # from sympy.combinatorics import Permutation
-        # import numpy as np
 
         if not hasattr(self.group, 'simple_transpositions'):
             self.group.find_simple_transps_reprs( )
@@ -298,34 +264,10 @@ class Representation:
             self.d[tuple(permutation_element._array_form)] = np.eye(len(self.group.standart_tableauxes))
 
 
-    def test(self):
-        from random import choice
-        for i in range(70):
-            p1 = choice(list(self.group.elements.items()))
-            p2 = choice(list(self.group.elements.items()))
-            p = p1[1] * p2[1]
-            try:
-                assert (self.group.elements[tuple(p._array_form)].representation == p1[1].representation.dot(p2[1].representation)).all()
-            except AssertionError:
-                print(p, "1\n", get_matrix(self.group.elements[tuple(p._array_form)].representation, self.show_exact_values))
-                print(p1[1], p2[1], "2\n", get_matrix(p1[1].representation.dot(p2[1].representation), self.show_exact_values))
-
-
-
 if __name__ == "__main__":
-    from time import time
-
-    S5 = SymmetricGroup(6)
+    S5 = SymmetricGroup(5)
     A5 = AlternatingGroup(5)
     repres = Representation(S5, get_exact_output = True)
 
-    t = time( )
     #print(repres.find_remain_elems( ))
     print(repres.find_remain_elems_parallel())
-    t = time( ) - t
-    t2 = time()
-    print("\n\nTime: ", t)
-    print('Display time: ', time() - t2)
-
-    # # m1 = SGR.get_matrix_represents_permutation([5, 4, 2, 1, 3, 6])
-
