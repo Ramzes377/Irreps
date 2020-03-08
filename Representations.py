@@ -3,18 +3,30 @@ import numpy as np
 from sympy import Rational, expand, Matrix, pretty
 from sympy.combinatorics import Permutation
 from itertools import permutations
-
+from numba import jit
 
 flatted = lambda x: [j for i in x for j in i]
 cycle_format = lambda permutation: "\nPermutation" + "".join(map(lambda x: str(tuple(x)), permutation.cyclic_form))
-
-
+np.set_printoptions(precision = 3, suppress = True, linewidth = 100)
 
 def get_matrix(matrix, show_type = False):
     if not show_type:
+        if matrix.dtype == 'complex128':
+            return '\n' + '\n'.join('\t'.join("{:.2g}".format(x) for x in y) for y in matrix)
         return '\n' + '\n'.join('\t'.join('%0.3f' % x for x in y) for y in matrix)
     else:
+        # from texttable import Texttable
+        # table = Texttable(0)
+        # table.set_deco(Texttable.HEADER)
         matrix = expand(Matrix(matrix))#
+        # n = matrix.shape[0]
+        # for row in range(n):
+        #     print("asdsad", pprint(matrix[row]))
+        #     s = str(matrix[row])[1:-1]  # " ".join(map(lambda x: str(round(x, 4)), matrix[row]))#
+        #     s = s.replace("sqrt(", "√").replace(")", "").split(" ")
+        #     table.add_row(list(filter(lambda x: x, s)))  #
+        #     print(s)
+        # return '\n' + table.draw( )
         return '\n' + pretty(matrix)
 
 class FiniteGroup:
@@ -29,8 +41,11 @@ class FiniteGroup:
 
     def __getitem__(self, element_array_form):
         return self.elements[element_array_form]
+    #
+    # def __setitem__(self, element_array_form, matrix_repr):
+    #     self.elements[element_array_form].representation = matrix_repr
 
-    def _display_calculated_elemets_representations(self, exact_output = False):
+    def _display_calculated_elemets_representations(self):
         t = 0
         not_calc = []
         self.output = repr(self)
@@ -39,11 +54,12 @@ class FiniteGroup:
                 not_calc.append(perm_el)
                 t += 1
             else:
-                self.output += '\n' + cycle_format(perm_el) + get_matrix(perm_el.representation, exact_output)
+                self.output += '\n' + cycle_format(perm_el) + get_matrix(perm_el.representation, self.show_exact_values)
         self.output += f"\n\n{t} elements not calculated!"
         self.output += f"\nNot calculated elements:\n{not_calc}\n" if t > 0 else '\n'
         self.output += '_'*50
         print(self.output)
+        return self.output
 
 class SymmetricGroup(FiniteGroup):
     def __init__(self, N: int):
@@ -52,14 +68,15 @@ class SymmetricGroup(FiniteGroup):
         self.elements = {}
         for x in permutations(range(1, self.n + 1)):
             el = Permutation((0,) + x, size = self.n + 1)
-            self.elements[tuple(el._array_form)] = el
+            temp = tuple(el._array_form)
+            self.elements[temp] = el
 
     def find_simple_transps_reprs(self):
         n = len(self.standart_tableauxes)
         conjugate = self.tableauxes.find_conjugate_transpositions( )
         axial_distances = self.tableauxes.find_axial_distances( )
         for x in range(1, self.n):  # going thru transpositions x, x+1
-            m = np.zeros((n, n), Rational if self.show_exact_values else np.float)  # create matrix a filled zeroes
+            m = np.zeros((n, n), dtype = Rational if self.show_exact_values else np.float)  # create matrix a filled zeroes
             conj = conjugate.get(x)
             axl_dist = axial_distances.get(x)
             for index in range(n):
@@ -98,7 +115,7 @@ class SymmetricGroup(FiniteGroup):
                     self.simple_transpositions[Permutation(i, j, size = self.n + 1)] = m
                     if tuple(Permutation(i, j, size = self.n + 1)._array_form) in self.elements:
                         self.elements[tuple(Permutation(i, j, size = self.n + 1)._array_form)].representation= m
-                        
+                        #self.group[tuple(Permutation(i, j, size = self._n + 1)._array_form)] = m
 
 class AlternatingGroup(SymmetricGroup):
     def __init__(self, N: int):
@@ -111,58 +128,61 @@ class AlternatingGroup(SymmetricGroup):
                 self.elements[tuple(el._array_form)] = el
 
     def find_simple_transps_reprs(self):
-        if not self._shape.is_self_conj:
+        if not self._shape.is_self_conjugated():
             super(AlternatingGroup, self).find_simple_transps_reprs()
             return
+
+        def reflect_matrix(m):
+            result = np.zeros((2 * n, 2 * n), datatype)
+            for i in range(n):
+                for j in range(n):
+                    result[i][j] = m[i][j]
+                    result[2 * n - i - 1][2 * n - j - 1] = -m[i][j] if i == j else m[i][j]
+            return result
+
         self.simple_transpositions = {}
-        n = len(self.standart_tableauxes)  # //2
+        n = len(self.standart_tableauxes) //2
         self.tableauxes.find_conjugate_transpositions( )
-        conjugate = self.tableauxes.calling_to_restrict()
+        conjugate = self.tableauxes.restrict()
         axial_distances = self.tableauxes.find_axial_distances( )
-        for x in range(1, self.n):  # going thru transpositions x, x+1 
-            m = np.zeros((n, n), Rational if self.show_exact_values else np.float) #create matrix filled with zeroes
+        mult, is_complex = self._shape.multiplier()
+        datatype = Rational if self.show_exact_values else np.complex if is_complex else np.float
+        #print(*conjugate.items( ), sep = "\n")
+        for x in range(1, self.n):  # going thru transpositions x, x+1
+            m = np.zeros((n, n), datatype) #create matrix filled with zeroes
             conj = conjugate[x]
             axl_dist = axial_distances.get(x)
             state = False
-            for index in range(n // 2 if self.n > 4 else n):
+            for index in range(n):
                 diag, non_diag = axl_dist.get(index)
                 if m[index, index] == 0:
                     m[index, index] = -diag
-                    m[n-index-1, n-index-1] = diag
                 if index in conj:
                     if conj[index]:
                         block = conj.get(index)
-
                         m[block, block] = diag
                         m[index, block] = m[block, index] = non_diag
-
-                        m[n - block - 1, n - block - 1] = -diag
-                        m[n - index - 1, n - block - 1] = m[n - block - 1, n - index - 1] = non_diag
                     else:
                         block = conj.get(str(index))
                         state = True
-
                         m[block, block] = diag
-                        m[index, block] = non_diag * self._shape.mult
-                        m[block, index] = non_diag * self._shape.mult ** (-1)
-
-                        m[n - block - 1, n - block - 1] = -diag
-                        m[n - block - 1, n - index - 1] = non_diag * self._shape.mult
-                        m[n - index - 1, n - block - 1] = non_diag * self._shape.mult ** (-1)
-
+                        m[index, block] = non_diag * mult
+                        m[block, index] = non_diag * mult ** (-1)
             if x == 1:
-                self.simple_transpositions[Permutation(1, 2, size = self.n + 1)] = m#result
+                p12 = m
+                self.simple_transpositions[Permutation(1, 2, size = self.n + 1)] = reflect_matrix(m)
             else:
+                perm = Permutation(x, x + 1, size = self.n + 1)
+                perm_array_form = tuple((Permutation(1, 2, size = self.n + 1) * perm)._array_form)
                 if not state:
-                    self.simple_transpositions[Permutation(x, x + 1, size = self.n + 1)] = m
-                    self.elements[tuple((Permutation(1, 2, size = self.n + 1) * Permutation(x, x + 1, size = self.n + 1))._array_form)].representation = self.simple_transpositions[Permutation(1, 2, size = self.n + 1)].dot(m)
+                    self.simple_transpositions[perm] = reflect_matrix(m)
+                    self.elements[perm_array_form].representation = reflect_matrix(p12.dot(m))
                 else:
-                    self.simple_transpositions[Permutation(x, x + 1, size = self.n + 1)] = m.dot(self.simple_transpositions[Permutation(1, 2, size = self.n + 1)])
-                    self.elements[tuple((Permutation(1, 2, size = self.n + 1) * Permutation(x, x + 1, size = self.n + 1))._array_form)].representation = m
-
+                    m = reflect_matrix(m)
+                    self.simple_transpositions[perm] = m#.dot(self.simple_transpositions[Permutation(1, 2, size = self.n + 1)])
+                    self.elements[perm_array_form].representation = m
 
 class Representation:
-    show_exact_values = False
 
     def __init__(self, group_instance, get_exact_output = False, shape = None):
         self.group = group_instance
@@ -172,11 +192,14 @@ class Representation:
             _Partitions = Partitions(self._n, isinstance(self.group, AlternatingGroup))
             print(_Partitions)
             self._shape = self.group._shape = _Partitions[int(input("\nInput partition index: "))]
-            self.group.tableauxes = Standart_tableauxes(self._shape)
-            self.group.standart_tableauxes = self.group.tableauxes.get_standart( )
-            print(self.group.tableauxes)
-        elif shape:
-            self._shape = Partition(shape) if isinstance(shape, (tuple, list)) else shape
+        else:
+            self._n = self.group.n
+            self._shape = self.group._shape = Partition(shape, isinstance(self.group, AlternatingGroup)) if isinstance(shape, (tuple, list)) and sum(shape) == self.group.n else shape
+
+        self.group.tableauxes = Standart_tableauxes(self._shape)
+        self.group.standart_tableauxes = self.group.tableauxes.get_standart( )
+        print(self.group.tableauxes)
+
         self.find_simple_transps_reprs( )
 
     def find_simple_transps_reprs(self):
@@ -184,32 +207,56 @@ class Representation:
         self.group.find_simple_transps_reprs()
         self.group.find_remain_simple_transps()
 
-    def find_remain_elems(self):
-        [self.__getitem__(elem) for elem in self.group.elements]
+    def find_remain_elems(self, parallel_type = None):
+        if not parallel_type:
+            tuple(self.compute_element(elem) for elem in self.group.elements)
+        else:
+            from multiprocessing import Manager
+            self.d = Manager( ).dict( )
+            if parallel_type == 'process':
+                from multiprocessing import Pool as ProcessPool
+                pool = ProcessPool(processes = 5)
+            elif parallel_type == 'thread':
+                from multiprocessing.dummy import Pool as ThreadPool
+                pool = ThreadPool(processes = 3)
+            else:
+                raise AttributeError(f'{parallel_type} in not supported!')
+            _pool = pool.map(self.compute_element_parallel, self.group.elements)
+            for el, repres in self.d.items( ):
+                self.group.elements[el].representation = repres
         return 'Function ends work'
-
-    def find_remain_elems_parallel(self):
-        from functools import partial
-        from multiprocessing import Manager, Pool as ProcessPool
-
-        manager = Manager( )
-        self.d = manager.dict()
-        pool = ProcessPool(processes = 3)
-        _pool = pool.map(self.find_elem, self.group.elements)
-        for el, repres in self.d.items():
-            self.group.elements[el].representation = repres
-        return 'Function ends work'
-
 
     def _display_calculated_elemets_representations(self):
-        return self.group._display_calculated_elemets_representations(self.show_exact_values)
+        return self.group._display_calculated_elemets_representations()
+
+
+    def compute_element(self, element_array_form):
+        permutation_element = self.group[element_array_form]
+        permutation_element.transp_factor = [Permutation([x], size = permutation_element.size) for x in permutation_element.transpositions( )[::-1]]
+
+        if len(permutation_element.transp_factor) > 1:
+            permutation_element.representation = np.linalg.multi_dot([self.group.simple_transpositions[x] for x in permutation_element.transp_factor])
+        elif len(permutation_element.transp_factor) == 0:
+            permutation_element.representation = np.eye(len(self.group.standart_tableauxes))
+
+
+    def compute_element_parallel(self, element_array_form):
+        permutation_element = self.group[element_array_form]
+        permutation_element.transp_factor = [Permutation([x], size = permutation_element.size) for x in permutation_element.transpositions( )[::-1]]
+
+        if len(permutation_element.transp_factor) > 1:
+            self.d[tuple(permutation_element._array_form)] = np.linalg.multi_dot([self.group.simple_transpositions[x] for x in permutation_element.transp_factor])
+        elif len(permutation_element.transp_factor) == 0:
+            self.d[tuple(permutation_element._array_form)] = np.eye(len(self.group.standart_tableauxes))
+
 
     def __getitem__(self, element_array_form):
 
         if not hasattr(self.group, 'simple_transpositions'):
-            self.group.find_simple_transps_reprs()
+            self.group.find_simple_transps_reprs( )
 
-        temp_perm = Permutation(element_array_form._array_form, size = self._n + 1) if isinstance(element_array_form, Permutation)\
+        temp_perm = Permutation(element_array_form._array_form, size = self._n + 1) if isinstance(element_array_form,
+                                                                                                  Permutation) \
             else Permutation(element_array_form, size = self._n + 1)
         if tuple(temp_perm._array_form) != element_array_form:
             element_array_form = tuple(temp_perm._array_form)
@@ -221,10 +268,12 @@ class Representation:
             return permutation_element.representation
 
         if not hasattr(permutation_element, 'transp_factor'):
-            permutation_element.transp_factor = [Permutation([x], size = permutation_element.size) for x in permutation_element.transpositions( )[::-1]]
+            permutation_element.transp_factor = [Permutation([x], size = permutation_element.size) for x in
+                                                 permutation_element.transpositions( )[::-1]]
 
         if len(permutation_element.transp_factor) > 1:
-            permutation_element.representation = np.linalg.multi_dot([self.group.simple_transpositions[x] for x in permutation_element.transp_factor])
+            permutation_element.representation = np.linalg.multi_dot(
+                [self.group.simple_transpositions[x] for x in permutation_element.transp_factor])
         elif len(permutation_element.transp_factor) == 0:
             permutation_element.representation = np.eye(len(self.group.standart_tableauxes))
 
@@ -233,38 +282,20 @@ class Representation:
         except AttributeError:
             pass
 
-    def find_elem(self, element_array_form):
-
-        if not hasattr(self.group, 'simple_transpositions'):
-            self.group.find_simple_transps_reprs( )
-
-        temp_perm = Permutation(element_array_form._array_form, size = self._n + 1) if isinstance(
-            element_array_form, Permutation) \
-            else Permutation(element_array_form, size = self._n + 1)
-        if tuple(temp_perm._array_form) != element_array_form:
-            element_array_form = tuple(temp_perm._array_form)
-
-        assert element_array_form in self.group.elements, f"Element {self.group[element_array_form]} not in {repr(self.group)}"
-
-        permutation_element = self.group[element_array_form]
-        if hasattr(permutation_element, 'representation'):
-            self.d[tuple(permutation_element._array_form)] = permutation_element.representation
-            #return permutation_element.representation
-
-        if not hasattr(permutation_element, 'transp_factor'):
-            permutation_element.transp_factor = [Permutation([x], size = permutation_element.size) for x in
-                                                 permutation_element.transpositions( )[::-1]]
-
-        if len(permutation_element.transp_factor) > 1:
-            self.d[tuple(permutation_element._array_form)] = np.linalg.multi_dot([self.group.simple_transpositions[x] for x in permutation_element.transp_factor])
-        elif len(permutation_element.transp_factor) == 0:
-            self.d[tuple(permutation_element._array_form)] = np.eye(len(self.group.standart_tableauxes))
-
 
 if __name__ == "__main__":
-    S5 = SymmetricGroup(5)
-    A5 = AlternatingGroup(5)
-    repres = Representation(S5, get_exact_output = True)
+    from time import time
+    S = SymmetricGroup(5)
+    A = AlternatingGroup(5)
+    repres = Representation(S, shape = (3, 1, 1), get_exact_output = True)
 
-    #print(repres.find_remain_elems( ))
-    print(repres.find_remain_elems_parallel())
+    t = time( )
+    print(repres.find_remain_elems(parallel_type = None))
+    #print(repres.find_remain_elems_parallel(parallel_type = 'process'))
+    #print(repres.find_remain_elems_parallel(parallel_type = 'thread'))
+    t = time( ) - t
+    repres._display_calculated_elemets_representations()
+    print('Time:', t)
+
+    # # m1 = SGR.get_matrix_represents_permutation([5, 4, 2, 1, 3, 6])
+
