@@ -1,19 +1,34 @@
 from functools import reduce
 from sympy import I
 
+def my_cache(function_to_decorate):
+    function_cache = {}
+    def wrapper(key):
+        if function_cache.get(key):
+            return function_cache.get(key)
+        else:
+            function_cache[key] = function_to_decorate(key)
+            return function_cache[key]
+    return wrapper
+
+@my_cache
+def quantity(n):
+    if n == 0:
+        return 1
+    t = 0
+    for k in range(1, n + 1):
+        q1 = quantity(n - (3 * k * k - k) // 2)
+        q2 = quantity(n - (3 * k * k + k) // 2)
+        t += (-1) ** (k + 1) * (q1 + q2)
+    return t
 
 class Partition:
-    mult = None
-    conjugated = None
-    is_self_conj = None
-
     def __init__(self, partition, find_conjugate = False):
         assert isinstance(partition, (tuple, list)), "Partition must be tuple or list type!"
         self.sequence = tuple(partition)
         self.n = sum(self.sequence)
         if find_conjugate:
             self.is_self_conj = self.is_self_conjugated()
-            self.mult = self.multiplier( )
 
     def __iter__(self):
         for i in self.sequence:
@@ -52,10 +67,13 @@ class Partition:
         return self.conjugated
 
     def multiplier(self):
-        temp = [2 * lambda_i - 2 * (i + 1) + 1 for i, lambda_i in enumerate(self)]
-        power = reduce(lambda x,y: x*y if y > 0 else x, temp)
-        power = (power - 1)//2
-        return I**power
+        if not hasattr(self, 'mult'):
+            temp = [2 * lambda_i - 2 * (i + 1) + 1 for i, lambda_i in enumerate(self)]
+            power = reduce(lambda x,y: x*y if y > 0 else x, temp)
+            power = (power - 1)//2
+            self.mult = I**power
+            self.is_complex = power % 2 != 0
+        return self.mult, self.is_complex
 
     def template(self):
         if not hasattr(self, 'tempt'):
@@ -138,5 +156,32 @@ class Partitions:
 if __name__ == "__main__":
     from time import time
     n = int(input("Input integer number: "))
-    print(Partitions(n))
+    print(Partitions(n, True))
+    # for i in range(1, 100):
+    #     t = time()
+    #     p = Partitions(i)
+    #     #print(p)
+    #     q1, q2 = quantity(i), p.approximate_quantity()
+    #     print(i, q1, q2, abs(q2 - q1))#, abs(q2 - q1)/q1)
+    #input("End...")
 
+
+
+"""
+def exp_form(self):
+    '''[6, 4, 4, 2, 1] -> [1, 0, 2, 0, 1, 1]
+'''
+    assert len(self.sequence) > 0
+    self.exp_form = [self.sequence.count(x) for x in range(self.sequence[0], 0, -1)]
+    return self.exp_form
+
+def log_form(self, exp_form):
+    '''[1, 0, 2, 0, 1, 1] -> [6, 4, 4, 2, 1]
+'''
+    assert isinstance(exp_form, (tuple, list))
+    n = len(exp_form)
+    partition = []
+    for sub, element in enumerate(exp_form):
+        partition.extend([n-sub]*element)
+    return Partition(partition)
+"""
