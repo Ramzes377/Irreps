@@ -1,6 +1,7 @@
 from Partitions import *
 from sympy import sqrt, Rational
 
+
 class Yamanuchi:
     def __init__(self, sequence = None, tablue = None, **kwargs):
         if kwargs.get('sequence', sequence):
@@ -159,12 +160,55 @@ class Tablue:
         return self.tablue[item]
 
     def __str__(self):
+        # from texttable import Texttable
+        # result = ""
+        # n = len(self.tablue_as_mll[0])
+        # for row in self.tablue_as_mll:
+        #     table = Texttable(0)
+        #     table.add_row(row)
+        #     k = table.draw()
+        #     for i in range(len(k) - 1, 0, -1):
+        #         if k[i] == "|":
+        #             #print(i)
+        #             k = k[:i + 1]
+        #             break
+        #     result += k + "\n"
+        # return result
         return "|\n".join(
             "| ".join(str(number) for number in string) for string in self.get_tablue_as_multi_level_list( )) + "\n"
 
     def __eq__(self, other):
         return self.shape == other.shape and tuple(self.tablue) == tuple(other.tablue)
 
+    def get_grid(self):
+        mll = self.get_tablue_as_multi_level_list()
+        if not hasattr(self, 'grid'):
+            self.grid = {}
+            for i in range(len(mll)):
+                level = mll[i]
+                for j in range(len(level)):
+                    self.grid[level[j]] = (i, j)
+        return self.grid
+
+    def restrict(self, restriction_length = 2):
+        def reflect_and_concat(grid, remainder):
+            new_grid = {}
+            for x, pos in grid.items():
+                new_grid[x] = (pos[1], pos[0])
+            for x, pos in remainder:
+                new_grid[x] = pos
+            return new_grid
+
+        grid = self.get_grid()
+        remainder = []
+
+        for i in range(self.n - restriction_length + 1, self.n + 1):
+            remainder.append((i, grid.pop(i)))
+
+        reflected_grid = reflect_and_concat(grid, remainder)
+        seq = [key for key, value in sorted(sorted(reflected_grid.items( ), key = lambda x: x[0]), key = lambda x: x[1])]
+        new_tablue = Tablue(self.shape, seq)
+        return new_tablue
 
 class Standart_tableauxes:
     def __init__(self, shape):
@@ -177,12 +221,21 @@ class Standart_tableauxes:
 
     def get_standart(self):
         '''Find standart Young tableauxes for given partition\n'''
-        elems = Yamanuchi(tablue = Tablue(self._shape, list(range(1, self._n + 1)))).sequence
-        temp = map(lambda p: Yamanuchi(sequence = p).get_tablue( ), self._helper_unique_permutations(elems))
+        #elems = Yamanuchi(tablue = Tablue(self._shape, list(range(1, self._n + 1)))).sequence
+        tablue = Tablue(self._shape, list(range(1, self._n + 1)))
+        elems = [tablue.tablue_as_mll.index(row) for index in range(1, self._n + 1) for row in tablue.get_tablue_as_multi_level_list() if index in row]
+        #temp = map(lambda p: Yamanuchi(sequence = p).get_tablue( ), self._helper_unique_permutations(elems))
+        temp = map(lambda p: self.t_from_seq(p), self._helper_unique_permutations(elems))
         self.tableauxes = filter(lambda t: t.is_standart( ), temp)
         for i in range(1, self._n):
             self.tableauxes = sorted(self.tableauxes, key = lambda f: f[i], reverse = True)
         return self.tableauxes
+
+    def t_from_seq(self, seq):
+        yamanuchi = dict(sorted(zip(range(1, len(seq) + 1), seq), key = lambda x: x[1]))
+        tablue = Tablue(self._shape, tuple(yamanuchi.keys( )))
+        tablue.yamanuchi = yamanuchi
+        return tablue
 
     def find_conjugate_transpositions(self):
         self.conjugate_transpositions[1] = {}
@@ -211,7 +264,36 @@ class Standart_tableauxes:
     def __str__(self):
         return f"\n{len(self.tableauxes)} standart Young's frames:\n" + "\n".join(map(str, self))
 
-    def calling_to_restrict(self):
+    # def calling_to_restrict(self):
+    #     n = len(self.tableauxes) // 2
+    #     result = {}
+    #     for idx in range(1, self._n - 2):
+    #         result[idx] = {x: y for x, y in self.conjugate_transpositions[idx].items( ) if x < n - 1}
+    #
+    #     for idx in range(self._n - 2, self._n):
+    #         temp = {}
+    #         already_calc = []
+    #         for x, y in self.conjugate_transpositions[idx].items( ):
+    #             if x < n - 1 and x not in already_calc:
+    #                 if  y > n - 1:
+    #                     tablue = self.tableauxes[x]
+    #                     yamanuchi = Yamanuchi(tablue = tablue)
+    #                     flipped = yamanuchi.restrict()
+    #                     try:
+    #                         index = self.tableauxes.index(flipped)
+    #                     except AttributeError:
+    #                         index = None
+    #                     if index and index < n:
+    #                         temp[str(x)] = index
+    #                         temp[x] = None
+    #                         already_calc.append(index)
+    #                 else:
+    #                     temp[x] = y
+    #         result[idx] = temp
+    #     self.conjugate_transpositions = result
+    #     return self.conjugate_transpositions
+
+    def restrict(self):
         n = len(self.tableauxes) // 2
         result = {}
         for idx in range(1, self._n - 2):
@@ -219,44 +301,119 @@ class Standart_tableauxes:
 
         for idx in range(self._n - 2, self._n):
             temp = {}
-            already_calc = []
             for x, y in self.conjugate_transpositions[idx].items( ):
-                if x < n - 1 and x not in already_calc:
-                    if  y > n - 1:
-                        tablue = self.tableauxes[x]
-                        yamanuchi = Yamanuchi(tablue = tablue)
-                        flipped = yamanuchi.restrict()
-                        try:
-                            index = self.tableauxes.index(flipped)
-                        except AttributeError:
-                            index = None
-                        if index and index < n:
-                            temp[str(x)] = index
-                            temp[x] = None
-                            already_calc.append(index)
-                    else:
+                if x < n - 1:
+                    if y < n:
                         temp[x] = y
+                    elif y >= n:
+                        tablue = self.tableauxes[x]
+                        restricted_and_flipped = tablue.restrict(2)
+                        try:
+                            index = self.tableauxes.index(restricted_and_flipped)
+                        except ValueError:
+                            restricted_and_flipped = tablue.restrict(1)
+                            index = self.tableauxes.index(restricted_and_flipped)
+                        if index < n:
+                            temp[x] = None
+                            temp[str(x)] = index
             result[idx] = temp
         self.conjugate_transpositions = result
         return self.conjugate_transpositions
 
     def _helper_unique_permutations(self, elements):
-        def unique_permutations(elements, t = 0):
+        def unique_permutations(elements, t = 1):
             if len(elements) == 1:
                 yield (elements[0],)
             unique_elements = set(elements)
             for first_element in unique_elements:
-                if first_element > t:
-                    continue
-                remaining_elements = list(elements)
-                remaining_elements.remove(first_element)
-                for sub_permutation in unique_permutations(remaining_elements, t + 1):
-                    yield (first_element,) + sub_permutation
+                if first_element < t:
+                    remaining_elements = list(elements)
+                    remaining_elements.remove(first_element)
+                    for sub_permutation in unique_permutations(remaining_elements, t + 1):
+                        yield (first_element,) + sub_permutation
         return unique_permutations(elements)
 
 
 if __name__ == "__main__":
+    from time import time
     shape = (3, 1, 1)
     print(f"Example\nFind standart tables for partition {shape}.\n")
+    t = time()
     y = Standart_tableauxes(shape)
     print(y)
+    print(time() - t)
+    #print(y.find_conjugate_transpositions( ))
+
+
+''' 
+
+
+def find_conjugate_transpositions2(self):
+    t = {}
+    t[1] = {}
+    valid = lambda t1,t2, n: t1.index(n) == t2.index(n+1) and sum([abs(x-y) for x,y in zip(t1,t2)]) == 2
+    for n in range(2, self._n):
+        t[n] = {a: b for a, t1 in enumerate(self) for b, t2 in enumerate(self) if a < b and valid(t1.tablue, t2.tablue, n)}
+    return t
+
+
+def from_yamanuchi(sequence):
+    tablue = [[] for x in range(len(set(sequence)))]
+    for i, ys in enumerate(sequence, start = 1):
+        tablue[ys].append(i)
+    return [j for i in tablue for j in i]
+
+
+old checking
+        def valid(sequence):
+            form = []; shift = 0
+            for lenght in self._shape:
+                temp = []
+                for index in range(lenght):
+                    temp.append(sequence[ index + shift ])
+                form.append(temp)
+                shift += lenght
+
+            for i in range(len(form)):
+                for j in range(len(form[i])):
+                    try:
+                        if form[i][j] > form[i+1][j] or form[i][j] > form[i][j+1]: 
+                            return False
+                    except IndexError:
+                        try:
+                            if form[i][j] > form[i][j+1]: 
+                                return False
+                        except IndexError:
+                            try:
+                                if form[i][j] > form[i+1][j]: 
+                                    return False
+                            except: 
+                                continue
+            #something.append(form)
+            #print(something)
+            return True
+
+
+            def from_yamanuchi(sequence):
+                tablue = [[] for x in range(len(shape))]
+                for i, ys in enumerate(yamanuchi_sequence, start = 1):
+                    tablue[ys].append(i)
+                for i in tablue:
+                    for j in i:
+                        result.append(j)
+                return result
+
+
+            # def from_yamanuchi(sequence):
+            #     result = []
+            #     i = start = 0
+            #     while len(result) < len(sequence):
+            #         try:
+            #             result.append(sequence.index(i, start) + 1)
+            #             start = result[-1]
+            #         except ValueError:
+            #             i += 1
+            #             start = 0
+            #     return result
+
+'''
