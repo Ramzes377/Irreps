@@ -285,14 +285,5 @@ if __name__ == "__main__":
     #representation.write_to_file()
     # m = representation[Permutation([(1,2), (7, 8)])]
     # print(get_matrix(m, True))
-    # t = 6
-    # p12 = Permutation(1, 2, size =t)
-    # p45 = Permutation(4, 5, size=t)
-    #
-    # print(p12 * p12)
-    # print(p12 * p45)
-    # print(p45 * p12)
-    # print(p12 * p12 * p45)
-    # print(p12 * p45 * p12)
 
 
