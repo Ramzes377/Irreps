@@ -18,8 +18,6 @@ class partition:
     #Use generator without unpacking it
     print(partition(partition = range(5, 1, -1)))
     5, 4, 3, 2
-
-
     """
     def __init__(self, *elems, **kwargs) -> None:
         """Partition can be generate with sequence of integers"""
