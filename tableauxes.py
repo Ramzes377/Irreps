@@ -284,12 +284,3 @@ if __name__ == "__main__":
     print(y)
     print(y.get_conjugated_tablues())
     print(y.get_restricted_conjugated_tablues())
-
-
-
-''' 
-
-
-
-
-'''
